@@ -38,6 +38,7 @@ import com.jotty.android.ui.common.ListScreenContent
 import com.jotty.android.ui.common.MainNestedScaffoldContentWindowInsets
 import com.jotty.android.ui.common.mainScreenTabContentPadding
 import com.jotty.android.util.ApiErrorHelper
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -92,6 +93,9 @@ fun OfflineEnabledChecklistsScreen(
                     result.exceptionOrNull() ?: Exception("Sync failed"),
                 )
             }
+            // syncChecklists() returns immediately if a background sync was already running.
+            // Wait here so the spinner stays visible until the data is fully written to DB.
+            offlineRepository.isSyncing.first { !it }
             if (showLoading) loading = false
         }
     }
