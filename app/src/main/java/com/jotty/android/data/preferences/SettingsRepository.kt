@@ -262,7 +262,7 @@ class SettingsRepository(
         context.jottySettingsDataStore.edit { p ->
             if (!p[KEY_INSTANCES].isNullOrBlank()) return@edit // concurrent re-entry guard
             p[KEY_INSTANCES] = gson.toJson(listOf(instance))
-            p[KEY_CURRENT_INSTANCE_ID] = instance.id
+            p[KEY_CURRENT_INSTANCE_ID] = instanceId
             p.remove(KEY_SERVER_URL)
             p.remove(KEY_API_KEY)
         }
