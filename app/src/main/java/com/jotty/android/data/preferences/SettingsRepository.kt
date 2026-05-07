@@ -206,20 +206,24 @@ class SettingsRepository(private val context: Context) {
         if (!prefs[KEY_INSTANCES].isNullOrBlank()) return
         val url = prefs[KEY_SERVER_URL]?.takeIf { it.isNotBlank() } ?: return
         val key = prefs[KEY_API_KEY]?.takeIf { it.isNotBlank() } ?: return
+        val encrypted = apiKeyStore.isEncrypted
+        val instanceId = UUID.randomUUID().toString()
+        // When encrypted: write durably to ApiKeyStore first (crash-safe; orphan key is
+        // harmless — next launch re-runs migration with a fresh UUID).
+        // When !encrypted: store key in plain text in JSON (same fallback as addInstance()).
+        if (encrypted) {
+            apiKeyStore.setApiKey(instanceId, key.trim())
+        }
         val instance = JottyInstance(
-            id = UUID.randomUUID().toString(),
+            id = instanceId,
             name = "Jotty",
             serverUrl = url.trim(),
-            apiKey = "",  // key moved to ApiKeyStore below
+            apiKey = if (encrypted) "" else key.trim(),
         )
-        // Write encrypted key (commit, durable) before DataStore edit.
-        // A crash after this write and before the edit leaves a harmless orphan key;
-        // the next launch re-runs this migration with a fresh UUID.
-        apiKeyStore.setApiKey(instance.id, key.trim())
         context.dataStore.edit { p ->
             if (!p[KEY_INSTANCES].isNullOrBlank()) return@edit // concurrent re-entry guard
             p[KEY_INSTANCES] = gson.toJson(listOf(instance))
-            p[KEY_CURRENT_INSTANCE_ID] = instance.id
+            p[KEY_CURRENT_INSTANCE_ID] = instanceId
             p.remove(KEY_SERVER_URL)
             p.remove(KEY_API_KEY)
         }
