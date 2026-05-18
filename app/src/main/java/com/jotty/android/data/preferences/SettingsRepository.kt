@@ -255,9 +255,8 @@ class SettingsRepository(
             )
         if (encrypted) {
             // Write encrypted key (commit, durable) before DataStore edit.
-            // A crash after this write and before the edit leaves a harmless orphan key;
-            // the next launch re-runs this migration with a fresh UUID.
-            apiKeyStore.setApiKey(instance.id, trimmedKey)
+            // Abort if commit() fails — better to keep legacy key in DataStore than erase it.
+            if (!apiKeyStore.setApiKey(instance.id, trimmedKey)) return
         }
         context.jottySettingsDataStore.edit { p ->
             if (!p[KEY_INSTANCES].isNullOrBlank()) return@edit // concurrent re-entry guard

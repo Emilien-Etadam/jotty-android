@@ -17,7 +17,7 @@ interface ApiKeyStorage {
     suspend fun setApiKey(
         instanceId: String,
         apiKey: String,
-    )
+    ): Boolean
 
     suspend fun removeApiKey(instanceId: String)
 
@@ -75,10 +75,10 @@ class ApiKeyStore(private val context: Context) : ApiKeyStorage {
     override suspend fun setApiKey(
         instanceId: String,
         apiKey: String,
-    ) {
-        if (apiKey.isBlank()) return
-        withContext(Dispatchers.IO) {
-            encryptedPrefs?.edit()?.putString(prefKey(instanceId), apiKey)?.commit()
+    ): Boolean {
+        if (apiKey.isBlank()) return false
+        return withContext(Dispatchers.IO) {
+            encryptedPrefs?.edit()?.putString(prefKey(instanceId), apiKey)?.commit() ?: false
         }
     }
 
