@@ -295,7 +295,11 @@ class SettingsRepository(
         context.jottySettingsDataStore.edit { p ->
             val current = parseInstances(p[KEY_INSTANCES]).orEmpty()
             val migrated = current.map {
-                if (it.apiKey.isNotBlank() && it.id !in failedIds) it.copy(apiKey = "") else it
+                if (it.apiKey.isNotBlank() && it.id !in failedIds) {
+                    it.copy(apiKey = "")
+                } else {
+                    it
+                }
             }
             p[KEY_INSTANCES] = gson.toJson(migrated)
         }
