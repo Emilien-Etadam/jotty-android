@@ -261,7 +261,7 @@ class SettingsRepository(
         context.jottySettingsDataStore.edit { p ->
             if (!p[KEY_INSTANCES].isNullOrBlank()) return@edit // concurrent re-entry guard
             p[KEY_INSTANCES] = gson.toJson(listOf(instance))
-            p[KEY_CURRENT_INSTANCE_ID] = instanceId
+            p[KEY_CURRENT_INSTANCE_ID] = instance.id
             p.remove(KEY_SERVER_URL)
             p.remove(KEY_API_KEY)
         }
@@ -283,16 +283,20 @@ class SettingsRepository(
         // Write all keys to encrypted store first (commit, durable).
         // A crash before the DataStore edit leaves encrypted keys written but DataStore unchanged;
         // the next launch finds the same plaintext keys and re-runs — fully idempotent.
+        val failedIds = mutableSetOf<String>()
         plainTextInstances.forEach { instance ->
             if (apiKeyStore.getApiKey(instance.id) == null) {
-                apiKeyStore.setApiKey(instance.id, instance.apiKey)
+                if (!apiKeyStore.setApiKey(instance.id, instance.apiKey)) {
+                    // commit() failed — skip blanking this instance's plaintext key.
+                    failedIds.add(instance.id)
+                }
             }
-            // If already in encrypted store (key non-null), the DataStore copy is stale —
-            // still blank it below regardless.
         }
         context.jottySettingsDataStore.edit { p ->
             val current = parseInstances(p[KEY_INSTANCES]).orEmpty()
-            val migrated = current.map { if (it.apiKey.isNotBlank()) it.copy(apiKey = "") else it }
+            val migrated = current.map {
+                if (it.apiKey.isNotBlank() && it.id !in failedIds) it.copy(apiKey = "") else it
+            }
             p[KEY_INSTANCES] = gson.toJson(migrated)
         }
     }

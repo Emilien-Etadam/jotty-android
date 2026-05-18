@@ -48,8 +48,9 @@ class SettingsRepositoryMigrationTest {
                     override suspend fun setApiKey(
                         instanceId: String,
                         apiKey: String,
-                    ) {
+                    ): Boolean {
                         setApiKeyCalls.add(instanceId to apiKey)
+                        return true
                     }
 
                     override suspend fun removeApiKey(instanceId: String) {}
@@ -104,10 +105,11 @@ class SettingsRepositoryMigrationTest {
         override suspend fun setApiKey(
             instanceId: String,
             apiKey: String,
-        ) {
-            if (apiKey.isBlank()) return
+        ): Boolean {
+            if (apiKey.isBlank()) return false
             keys[instanceId] = apiKey
             setApiKeyCalls.add(instanceId to apiKey)
+            return true
         }
 
         override suspend fun removeApiKey(instanceId: String) {
