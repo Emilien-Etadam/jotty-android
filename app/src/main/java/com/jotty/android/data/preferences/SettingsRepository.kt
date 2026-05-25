@@ -255,9 +255,8 @@ class SettingsRepository(
             )
         if (encrypted) {
             // Write encrypted key (commit, durable) before DataStore edit.
-            // A crash after this write and before the edit leaves a harmless orphan key;
-            // the next launch re-runs this migration with a fresh UUID.
-            apiKeyStore.setApiKey(instance.id, trimmedKey)
+            // Abort if commit() fails — better to keep legacy key in DataStore than erase it.
+            if (!apiKeyStore.setApiKey(instance.id, trimmedKey)) return
         }
         context.jottySettingsDataStore.edit { p ->
             if (!p[KEY_INSTANCES].isNullOrBlank()) return@edit // concurrent re-entry guard
@@ -284,16 +283,25 @@ class SettingsRepository(
         // Write all keys to encrypted store first (commit, durable).
         // A crash before the DataStore edit leaves encrypted keys written but DataStore unchanged;
         // the next launch finds the same plaintext keys and re-runs — fully idempotent.
+        val failedIds = mutableSetOf<String>()
         plainTextInstances.forEach { instance ->
             if (apiKeyStore.getApiKey(instance.id) == null) {
-                apiKeyStore.setApiKey(instance.id, instance.apiKey)
+                if (!apiKeyStore.setApiKey(instance.id, instance.apiKey)) {
+                    // commit() failed — skip blanking this instance's plaintext key.
+                    failedIds.add(instance.id)
+                }
             }
-            // If already in encrypted store (key non-null), the DataStore copy is stale —
-            // still blank it below regardless.
         }
         context.jottySettingsDataStore.edit { p ->
             val current = parseInstances(p[KEY_INSTANCES]).orEmpty()
-            val migrated = current.map { if (it.apiKey.isNotBlank()) it.copy(apiKey = "") else it }
+            val migrated =
+                current.map {
+                    if (it.apiKey.isNotBlank() && it.id !in failedIds) {
+                        it.copy(apiKey = "")
+                    } else {
+                        it
+                    }
+                }
             p[KEY_INSTANCES] = gson.toJson(migrated)
         }
     }
